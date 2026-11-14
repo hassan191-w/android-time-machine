@@ -8,8 +8,8 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),si
 const box={window:{}};vm.runInNewContext(fs.readFileSync(path.join(root,'versions/catalog.js'),'utf8'),box);
 const image=site+'assets/og-cover.jpg?v=18';
 const alt='Five Nexus phones showing their Android home screens beside the Android Time Machine title.';
-const pages=[{file:'index.html',title:'Android Time Machine',socialTitle:'Android Time Machine â€“ old Androids in the browser',description:'Explore Android 2.1â€“7.1 on classic Nexus phones: home screens, notifications, settings and apps, in your browser. Nothing to install.',url:site},
- ...box.window.ANDROID_VERSIONS.filter(v=>v.status==='available').map(v=>({file:v.url+'index.html',title:`${v.version} ${v.name} Â· Android Time Machine`,socialTitle:`${v.version} ${v.name} â€“ ${v.device.split(' Â· ')[0]} simulator`,description:v.description,url:site+v.url}))];
+const pages=[{file:'index.html',title:'Android Time Machine',socialTitle:'Android Time Machine – old Androids in the browser',description:'Explore Android 2.1–7.1 on classic Nexus phones: home screens, notifications, settings and apps, in your browser. Nothing to install.',url:site},
+ ...box.window.ANDROID_VERSIONS.filter(v=>v.status==='available').map(v=>({file:v.url+'index.html',title:`${v.version} ${v.name} · Android Time Machine`,socialTitle:`${v.version} ${v.name} – ${v.device.split(' · ')[0]} simulator`,description:v.description,url:site+v.url}))];
 const esc=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
 for(const p of pages){
  const meta=(key,value,name=false)=>`  <meta ${name?'name':'property'}="${key}" content="${esc(value)}">`;
