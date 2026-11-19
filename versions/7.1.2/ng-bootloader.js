@@ -13,6 +13,26 @@
   const unlocked = () => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } };
   const setUnlocked = v => { try { v ? localStorage.setItem(KEY, '1') : localStorage.removeItem(KEY); } catch (e) {} };
 
+  // The simulator keeps its settings in localStorage; OEM unlocking lives at settings.dev.oem_unlock_enable.
+  const oemOn = () => {
+    try { const d = JSON.parse(localStorage.getItem('android-time-machine-ng-v1')); return !!(d && d.settings && d.settings.dev && d.settings.dev.oem_unlock_enable); }
+    catch (e) { return false; }
+  };
+  // Once the bootloader is unlocked, Developer options shows OEM unlocking switched on and greyed out, as on a real phone.
+  function hookSettings() {
+    if (typeof NG === 'undefined' || !NG.settingsHooks) return false;
+    const H = NG.settingsHooks.development_prefs;
+    if (!H) return false;
+    if (H.__ngbl) return true;
+    const get = H.get, dis = H.disabled;
+    H.get = (c, key, n) => (key === 'oem_unlock_enable' && unlocked()) ? true : get(c, key, n);
+    H.disabled = (c, key, n) => (key === 'oem_unlock_enable' && unlocked()) || dis(c, key, n);
+    H.__ngbl = true;
+    return true;
+  }
+  let hookTries = 0;
+  const hookTimer = setInterval(() => { if (hookSettings() || ++hookTries > 150) clearInterval(hookTimer); }, 100);
+
   const css = `
 .ngbl{position:absolute;inset:0;z-index:99999;background:#000;color:#fff;font:13px/1.5 Roboto,system-ui,sans-serif;padding:22px 16px;overflow:hidden}
 .ngbl h3{margin:0 0 8px;font-size:18px;font-weight:500;color:#ef5350}
@@ -104,6 +124,7 @@
     if (v === 'fastboot getvar product') return say('product: angler');
     if (v === 'fastboot flashing unlock') {
       if (unlocked()) return say('FAILED (already unlocked)');
+      if (!oemOn()) return say('FAILED (remote: oem unlock is not allowed)\nTurn on OEM unlocking in Settings > Developer options first.');
       say('Confirm on the device screen...'); st.confirm = true; st.sel = 0; return render();
     }
     if (v === 'fastboot flashing lock') { setUnlocked(false); say('Locked.'); return render(); }
@@ -180,5 +201,5 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
   else build();
-  window.NGBootloader = { open };
+  window.NGBootloader = { open, unlocked, oemOn };
 })();
