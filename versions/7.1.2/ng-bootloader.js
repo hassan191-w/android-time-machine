@@ -8,7 +8,7 @@
   const KEY = 'ngbl-unlocked', BOOT = 'android-sim-booted-7.1.2';
   const MENU = ['Start', 'Restart bootloader', 'Recovery mode', 'Power off'];
   const st = { open: false, mode: 'bl', sel: 0, confirm: false, vol: false, swallow: false };
-  let root, term, out;
+  let root, term, out, fab;
 
   const unlocked = () => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } };
   const setUnlocked = v => { try { v ? localStorage.setItem(KEY, '1') : localStorage.removeItem(KEY); } catch (e) {} };
@@ -21,9 +21,13 @@
 .ngbl li{padding:8px 10px;border-radius:4px;cursor:pointer}
 .ngbl li.on{background:#1a73e8}
 .ngbl.off{background:#000}
-.ngbl-btn{font:inherit;color:inherit;background:none;border:1px solid currentColor;border-radius:8px;padding:4px 10px;cursor:pointer;margin-inline-end:8px}
+.header-actions button.ngbl-btn{width:auto;height:35px;border-radius:18px;padding:0 12px;font-size:12px;color:#8ad7e5;background:#122630;border:1px solid #63808a61;cursor:pointer}
+@media(max-width:500px){.ngbl-term{position:fixed;left:8px;right:8px;bottom:8px;margin:0;height:170px;z-index:100000;max-width:none}}
 .ngbl-term{direction:ltr;margin:14px auto 0;max-width:392px;background:#0b0f13;color:#d7e1ea;border-radius:10px;font:13px/1.5 "Roboto Mono",monospace;padding:10px;height:190px;display:none;flex-direction:column}
 .ngbl-term.show{display:flex}
+.ngbl-fab{position:fixed;right:8px;bottom:90px;z-index:100001;font:500 12px Roboto,system-ui,sans-serif;color:#8ad7e5;background:#122630;border:1px solid #63808a;border-radius:18px;padding:9px 14px;cursor:pointer}
+.ngbl-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.ngbl-chips button{font:12px "Roboto Mono",monospace;color:#d7e1ea;background:#1b232b;border:1px solid #3a444d;border-radius:14px;padding:5px 10px;cursor:pointer}
 .ngbl-term pre{flex:1;margin:0;overflow:auto;white-space:pre-wrap;font:inherit}
 .ngbl-term form{display:flex;gap:6px;margin:6px 0 0}
 .ngbl-term input{flex:1;min-width:0;background:none;border:0;border-bottom:1px solid #3a444d;color:inherit;font:inherit}`;
@@ -57,6 +61,7 @@
     });
     screen.appendChild(root);
     term.classList.add('show');
+    if (fab) fab.style.display = 'none';
     render();
   }
 
@@ -109,14 +114,20 @@
   function build() {
     const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
     term = document.createElement('div'); term.className = 'ngbl-term';
-    term.innerHTML = '<pre>$ help</pre><form><span>$</span><input autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="fastboot command"></form>';
+    const CMDS = ['fastboot devices', 'fastboot flashing unlock', 'fastboot flashing lock', 'fastboot reboot'];
+    term.innerHTML = '<pre>$ help</pre><div class="ngbl-chips">' + CMDS.map(c => '<button type="button" data-c="' + c + '">' + c.replace('fastboot ', '') + '</button>').join('') + '</div><form><span>$</span><input autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="fastboot command"></form>';
     out = term.querySelector('pre');
+    term.querySelector('.ngbl-chips').addEventListener('click', e => { const b = e.target.closest('button'); if (b) command(b.dataset.c); });
     term.querySelector('form').addEventListener('submit', e => {
       e.preventDefault();
       const inp = term.querySelector('input'); command(inp.value); inp.value = '';
     });
     const area = document.querySelector('.device-area') || document.body;
     area.appendChild(term);
+    fab = document.createElement('button');
+    fab.type = 'button'; fab.className = 'ngbl-fab'; fab.textContent = 'Bootloader';
+    fab.addEventListener('click', open);
+    document.body.appendChild(fab);
     const actions = document.querySelector('.header-actions');
     if (actions) {
       const b = document.createElement('button');
@@ -127,30 +138,34 @@
     if (location.hash === '#bootloader') open();
   }
 
-  // Hardware keys: hold the lower half of the volume rocker, then press power.
-  const lower = e => {
-    const r = e.target.closest('.volume-rocker').getBoundingClientRect();
-    return e.clientY - r.top > r.height / 2;
+  // Keys: the side keys on desktop, the header buttons on phones.
+  // Hold volume down, then press power, to enter the bootloader.
+  const keyOf = e => {
+    const t = e.target;
+    if (!t || !t.closest) return '';
+    if (t.closest('#volume-down')) return 'down';
+    if (t.closest('#volume-up')) return 'up';
+    const rocker = t.closest('.volume-rocker');
+    if (rocker) { const r = rocker.getBoundingClientRect(); return e.clientY - r.top > r.height / 2 ? 'down' : 'up'; }
+    if (t.closest('.power-key, #power-button')) return 'power';
+    return '';
   };
   document.addEventListener('pointerdown', e => {
-    const t = e.target.closest && e.target;
-    if (!t || !t.closest) return;
+    const k = keyOf(e);
     st.swallow = false;
-    if (t.closest('.volume-rocker')) {
-      const down = lower(e);
-      if (down) st.vol = true;
-      if (st.open) { st.swallow = true; e.stopImmediatePropagation(); volKey(down ? 1 : -1); }
-    } else if (t.closest('.power-key')) {
+    if (!k) return;
+    if (k === 'down') st.vol = true;
+    if (k === 'power') {
       if (st.open) { st.swallow = true; e.stopImmediatePropagation(); powerKey(); }
       else if (st.vol) { st.swallow = true; e.stopImmediatePropagation(); open(); }
+    } else if (st.open) {
+      st.swallow = true; e.stopImmediatePropagation(); volKey(k === 'down' ? 1 : -1);
     }
   }, true);
   document.addEventListener('click', e => {
-    if (st.swallow && e.target.closest && e.target.closest('.power-key, .volume-rocker')) {
-      e.stopImmediatePropagation(); e.preventDefault(); st.swallow = false;
-    }
+    if (st.swallow && keyOf(e)) { e.stopImmediatePropagation(); e.preventDefault(); st.swallow = false; }
   }, true);
-  ['pointerup', 'pointercancel'].forEach(n => document.addEventListener(n, () => { st.vol = false; }, true));
+  ['pointerup', 'pointercancel'].forEach(n => document.addEventListener(n, () => { setTimeout(() => { st.vol = false; }, 0); }, true));
 
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
